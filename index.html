@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>L1-zkEVM Roadmap 2026</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/black.css" id="theme">
+  <style>
+    :root { --accent: #56ccf2; --muted: #a0aec0; }
+    .reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
+    .reveal .accent { color: var(--accent); }
+    .reveal .small { font-size: 0.7em; color: var(--muted); }
+    .reveal ul { font-size: 0.9em; }
+    .box {
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 0.7em 1em;
+      margin: 0.6em 0;
+      background: rgba(15, 23, 42, 0.45);
+    }
+    code.inline {
+      background: #1e293b;
+      border-radius: 6px;
+      padding: 0.08em 0.35em;
+      color: #93c5fd;
+    }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+      <section>
+        <h1>L1-zkEVM Roadmap 2026</h1>
+        <p class="accent">From architecture choices to production rollout</p>
+        <p class="small">Prepared as an implementer-focused study guide deck</p>
+        <aside class="notes">Open with objective: turn abstract zkEVM concepts into an execution-ready 2026 roadmap. Emphasize this is pragmatic and phased, not purely theoretical.</aside>
+      </section>
+
+      <section>
+        <h2>Executive Summary</h2>
+        <ul>
+          <li>2026 is about <span class="accent">operational zkEVM</span>, not just proof-of-concept.</li>
+          <li>Winning stack = prover efficiency + secure circuits + reliable operations.</li>
+          <li>Near-term bottleneck: proving latency/cost and integration complexity.</li>
+          <li>Roadmap: pilot fast, harden aggressively, decentralize proving gradually.</li>
+        </ul>
+        <aside class="notes">Anchor audience: success is measured by user experience, costs, and security posture. Mention gradual decentralization to avoid premature complexity.</aside>
+      </section>
+
+      <section>
+        <h2>TL;DR</h2>
+        <div class="box">
+          <p><strong>Build now with hybrid proving</strong>, optimize recursion pipelines, and ship with conservative circuit governance.</p>
+          <p><strong>Do in 2026:</strong> staged rollout, fallback paths, and measurable SLOs for proof generation.</p>
+        </div>
+        <ul>
+          <li>Short term: central coordinator + vetted proving partners.</li>
+          <li>Mid term: marketized prover supply with strict quality gates.</li>
+          <li>Always: treat proving correctness as critical infrastructure.</li>
+        </ul>
+        <aside class="notes">Give a practical one-minute summary for decision makers. Reinforce staged adoption over all-at-once decentralization.</aside>
+      </section>
+
+      <section>
+        <h2>Overview</h2>
+        <ul>
+          <li>L1-zkEVM aligns EVM execution with succinct proof verification at L1.</li>
+          <li>Goals: lower trust assumptions, better throughput economics, deterministic settlement.</li>
+          <li>Core modules:
+            <ul>
+              <li>Execution layer (EVM-equivalent semantics)</li>
+              <li>Prover pipeline (trace → witness → proof)</li>
+              <li>Verifier contracts + settlement logic</li>
+            </ul>
+          </li>
+        </ul>
+        <aside class="notes">Define terminology quickly. Ensure everyone shares the same mental model: proving is a pipeline with multiple operational choke points.</aside>
+      </section>
+
+      <section>
+        <h2>Motivations</h2>
+        <ul>
+          <li><strong>Security:</strong> cryptographic validity over social trust.</li>
+          <li><strong>Scalability:</strong> compress execution verification cost.</li>
+          <li><strong>Composability:</strong> preserve EVM developer experience.</li>
+          <li><strong>Finality UX:</strong> predictable settlement windows.</li>
+          <li><strong>Cost control:</strong> optimize proving + calldata footprint.</li>
+        </ul>
+        <aside class="notes">Frame tradeoffs: you gain stronger correctness guarantees but pay for complexity in proving systems and operations.</aside>
+      </section>
+
+      <section>
+        <h2>Prover Architectures</h2>
+        <ul>
+          <li><strong>Monolithic prover:</strong> simpler coordination, weaker elasticity.</li>
+          <li><strong>Modular pipeline:</strong> specialized stages, better parallelism.</li>
+          <li><strong>Recursive proving trees:</strong> aggregate many subproofs into one final proof.</li>
+          <li><strong>Hardware strategy:</strong> CPU baseline + GPU acceleration (+ optional FPGA/ASIC roadmap).</li>
+        </ul>
+        <p class="small">Selection criteria: latency target, capex/opex profile, failure isolation, and upgrade complexity.</p>
+        <aside class="notes">Discuss architecture as business decision too: cost predictability, vendor dependence, and operational resilience.</aside>
+      </section>
+
+      <section>
+        <h2>Real-Time Proving</h2>
+        <ul>
+          <li>Target class: near-real-time proofs for user-facing finality expectations.</li>
+          <li>Levers:
+            <ul>
+              <li>Parallel witness generation</li>
+              <li>Precompilation/circuit specialization</li>
+              <li>Aggressive batching + adaptive block sizing</li>
+            </ul>
+          </li>
+          <li>Need graceful degradation when proof queue backlogs.</li>
+        </ul>
+        <aside class="notes">Call out SLO mindset: P50/P95 proving latency, queue depth, and drop/fallback policies.</aside>
+      </section>
+
+      <section>
+        <h2>Prover Market</h2>
+        <ul>
+          <li>Emerging model: open prover marketplace with scoring + staking/slashing.</li>
+          <li>Requirements:
+            <ul>
+              <li>Deterministic job specs</li>
+              <li>Proof validity checks + anti-equivocation</li>
+              <li>Reputation and reliability metrics</li>
+            </ul>
+          </li>
+          <li>Roadmap should begin permissioned, then progressively open.</li>
+        </ul>
+        <aside class="notes">Emphasize market design risks: cartelization, latency gaming, and unreliable providers. Stress phased liberalization.</aside>
+      </section>
+
+      <section>
+        <h2>Integration Challenges</h2>
+        <ul>
+          <li>EVM edge-case compatibility and opcode semantics drift.</li>
+          <li>State model alignment across execution, witness, and verifier.</li>
+          <li>Bridges/oracles introducing non-zk trust dependencies.</li>
+          <li>Versioning pain: circuit upgrades vs client/protocol upgrades.</li>
+          <li>Observability gaps across proving pipeline stages.</li>
+        </ul>
+        <aside class="notes">Practical warning: most delays happen in integration, not core proving math. Instrument early and test adversarially.</aside>
+      </section>
+
+      <section>
+        <h2>Security</h2>
+        <ul>
+          <li><strong>Threats:</strong> circuit bugs, faulty witness generation, key compromise, malformed proofs.</li>
+          <li><strong>Controls:</strong> multi-implementation verification, formal methods on critical circuits, independent audits.</li>
+          <li><strong>Operational security:</strong> signer isolation, deterministic builds, reproducible prover binaries.</li>
+          <li><strong>Response:</strong> emergency brakes + rollback/fallback playbooks.</li>
+        </ul>
+        <aside class="notes">Treat zk stack as high-assurance software plus critical infra. Mention drills, incident readiness, and segmented privileges.</aside>
+      </section>
+
+      <section>
+        <h2>Rollout Plan (2026)</h2>
+        <ul>
+          <li><strong>Phase 0:</strong> private devnet, synthetic load tests.</li>
+          <li><strong>Phase 1:</strong> guarded testnet with partner provers.</li>
+          <li><strong>Phase 2:</strong> capped mainnet beta + strict risk limits.</li>
+          <li><strong>Phase 3:</strong> progressive decentralization of proving and governance.</li>
+        </ul>
+        <p class="small">Exit criteria per phase: correctness, latency SLOs, cost envelope, and incident readiness.</p>
+        <aside class="notes">Highlight explicit go/no-go gates. No phase should advance based on narrative momentum alone.</aside>
+      </section>
+
+      <section>
+        <h2>Diagrams (textual)</h2>
+        <div class="box">
+          <p><strong>Flow A:</strong> Tx Batch → Execution Trace → Witness Builder → Prover Workers → Recursive Aggregator → L1 Verifier → Finality</p>
+        </div>
+        <div class="box">
+          <p><strong>Flow B:</strong> Scheduler → Prover Market Queue → Assigned Worker → Proof + Metadata → Validity Check → Payment/Reputation Update</p>
+        </div>
+        <div class="box">
+          <p><strong>Flow C (fallback):</strong> Queue Congestion → Block Size Reduction + Priority Classes → Delayed Settlement Mode</p>
+        </div>
+        <aside class="notes">Use these as verbal architecture diagrams. Point out where to place metrics and failure detectors in each flow.</aside>
+      </section>
+
+      <section>
+        <h2>1-Week Plan</h2>
+        <ul>
+          <li>Finalize architecture decision record (ADR) for prover topology.</li>
+          <li>Define baseline SLOs: proof latency, queue depth, verifier gas budget.</li>
+          <li>Set up benchmark harness and representative transaction corpus.</li>
+          <li>Draft threat model and circuit audit scope.</li>
+          <li>Create incident runbook v0 for proving failures.</li>
+        </ul>
+        <aside class="notes">Week-1 objective is clarity and instrumentation, not perfection. Ensure measurable baselines exist before optimization.</aside>
+      </section>
+
+      <section>
+        <h2>1-Month Plan</h2>
+        <ul>
+          <li>Run end-to-end testnet pilot with continuous proving.</li>
+          <li>Implement recursive aggregation and queue autoscaling policy.</li>
+          <li>Complete first external security review and fix criticals.</li>
+          <li>Integrate observability dashboards + on-call alert thresholds.</li>
+          <li>Publish launch readiness report with risk register.</li>
+        </ul>
+        <aside class="notes">Month-1 should yield evidence: benchmark numbers, security findings, and an explicit risk register for stakeholders.</aside>
+      </section>
+
+      <section>
+        <h2>Implementer Checklist</h2>
+        <ul>
+          <li>☐ Circuit/version governance process defined</li>
+          <li>☐ Reproducible build + binary attestation in CI</li>
+          <li>☐ Multi-client verification path tested</li>
+          <li>☐ Prover failover + degraded mode validated</li>
+          <li>☐ Cost model reviewed against real workload</li>
+          <li>☐ Incident drills performed and documented</li>
+          <li>☐ Phase gate criteria signed off by engineering + security</li>
+        </ul>
+        <aside class="notes">Make this the action slide. Encourage owners and deadlines per checkbox.</aside>
+      </section>
+
+      <section>
+        <h2>Next Steps</h2>
+        <ul>
+          <li>Choose pilot scope (apps, throughput, target latency).</li>
+          <li>Lock architecture + procurement for proving hardware.</li>
+          <li>Stand up partner prover program and qualification process.</li>
+          <li>Schedule quarterly security and performance gate reviews.</li>
+        </ul>
+        <p class="accent">Outcome goal: production-grade zkEVM with predictable costs and auditable safety.</p>
+        <aside class="notes">Close with ownership and timeline. Ask for explicit approvals on scope, budget, and risk tolerance.</aside>
+      </section>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      slideNumber: true,
+      progress: true,
+      controls: true,
+      plugins: [ RevealNotes ]
+    });
+  </script>
+</body>
+</html>
