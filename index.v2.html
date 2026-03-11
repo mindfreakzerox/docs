@@ -1,0 +1,571 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>L1-zkEVM Roadmap 2026</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/theme/black.css" id="theme">
+  <style>
+    :root { --accent: #56ccf2; --muted: #a0aec0; --green: #6ee7b7; --orange: #fbbf24; }
+    .reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
+    .reveal .accent { color: var(--accent); }
+    .reveal .small { font-size: 0.7em; color: var(--muted); }
+    .reveal ul { font-size: 0.9em; }
+    .reveal .demo-tag { display:inline-block; background:#7c3aed; color:#fff; border-radius:6px; padding:0.1em 0.5em; font-size:0.65em; vertical-align:middle; margin-left:0.4em; }
+    .box {
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 0.7em 1em;
+      margin: 0.6em 0;
+      background: rgba(15, 23, 42, 0.45);
+    }
+    .two-col { display:flex; gap:1.5em; }
+    .two-col > div { flex:1; }
+    code.inline {
+      background: #1e293b;
+      border-radius: 6px;
+      padding: 0.08em 0.35em;
+      color: #93c5fd;
+    }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides">
+
+      <!-- ===== TITLE ===== -->
+      <section>
+        <h1>L1-zkEVM Roadmap 2026</h1>
+        <p class="accent">From architecture choices to production rollout</p>
+        <p class="small">Prepared as an implementer-focused study guide deck</p>
+        <aside class="notes">Open with objective: turn abstract zkEVM concepts into an execution-ready 2026 roadmap. Emphasize this is pragmatic and phased, not purely theoretical.</aside>
+      </section>
+
+      <!-- ===== FUNDAMENTALS (new) ===== -->
+      <section>
+        <h2>🧩 Fundamentals — Section Overview</h2>
+        <p>Before diving into the roadmap, let's build shared intuition for the core ideas behind zero-knowledge proofs and the zkEVM.</p>
+        <ul>
+          <li>ZK intuition — what does "zero knowledge" actually mean?</li>
+          <li>SNARK vs STARK — the two proof families</li>
+          <li>Recursion & aggregation</li>
+          <li>Proof vs Witness</li>
+          <li>EVM-equivalence intuition</li>
+        </ul>
+        <aside class="notes">This section is designed for students who may be encountering ZK for the first time. Spend 10-15 minutes here. Encourage questions.</aside>
+      </section>
+
+      <section>
+        <h2>ZK Intuition</h2>
+        <div class="box">
+          <p><strong>Analogy:</strong> Imagine proving you know a secret passphrase to enter a cave — without ever revealing the passphrase itself.</p>
+        </div>
+        <ul>
+          <li><strong>Prover</strong> convinces a <strong>Verifier</strong> that a statement is true.</li>
+          <li>The verifier learns <em>nothing</em> beyond the truth of the statement.</li>
+          <li>Properties: <span class="accent">Completeness</span>, <span class="accent">Soundness</span>, <span class="accent">Zero-Knowledge</span>.</li>
+        </ul>
+        <aside class="notes">Use the "Ali Baba cave" analogy. Completeness = honest prover always convinces. Soundness = cheating prover fails. ZK = verifier learns nothing extra. Ask students: "Can you think of a real-world situation where you prove something without revealing it?" (e.g., age verification without showing ID).</aside>
+      </section>
+
+      <section>
+        <h2>SNARK vs STARK (High Level)</h2>
+        <div class="two-col">
+          <div class="box">
+            <h3 style="color:var(--accent)">SNARKs</h3>
+            <ul>
+              <li>Small proof size (~200 bytes)</li>
+              <li>Fast verification</li>
+              <li>Requires <em>trusted setup</em></li>
+              <li>Not quantum-resistant</li>
+            </ul>
+          </div>
+          <div class="box">
+            <h3 style="color:var(--green)">STARKs</h3>
+            <ul>
+              <li>Larger proofs (~50-200 KB)</li>
+              <li>Transparent (no trusted setup)</li>
+              <li>Quantum-resistant (hash-based)</li>
+              <li>Higher verification cost on-chain</li>
+            </ul>
+          </div>
+        </div>
+        <p class="small">Many production systems use a hybrid: STARK internally, SNARK wrapper for cheap L1 verification.</p>
+        <aside class="notes">Don't go deep into math here. Key takeaway: SNARKs are compact but need trust assumptions; STARKs are transparent but bigger. The industry is converging on hybrid approaches. Ask: "Why might you wrap a STARK inside a SNARK?"</aside>
+      </section>
+
+      <section>
+        <h2>Recursion & Aggregation</h2>
+        <ul>
+          <li><strong>Recursion:</strong> a proof that verifies another proof — "proof of a proof".</li>
+          <li><strong>Aggregation:</strong> combine many proofs into one succinct proof.</li>
+          <li>Why it matters:
+            <ul>
+              <li>Prove thousands of transactions in a single on-chain verification.</li>
+              <li>Enables tree-structured parallelism in proving.</li>
+            </ul>
+          </li>
+        </ul>
+        <div class="box">
+          <p><strong>Mental model:</strong> Imagine folding a long receipt into a single stamp of approval.</p>
+        </div>
+        <aside class="notes">Recursion is the key to scalability. Without it, proving cost grows linearly with batch size. With recursion, you build a tree: each leaf proves a chunk, inner nodes aggregate, and the root is what goes on-chain. Draw a binary tree on the whiteboard if possible.</aside>
+      </section>
+
+      <section>
+        <h2>Proof vs Witness</h2>
+        <div class="two-col">
+          <div class="box">
+            <h3 style="color:var(--orange)">Witness</h3>
+            <p>The <em>private input</em> — all the data the prover uses to compute the proof (execution trace, state, etc.).</p>
+            <p class="small">Never sent on-chain. Can be very large.</p>
+          </div>
+          <div class="box">
+            <h3 style="color:var(--accent)">Proof</h3>
+            <p>The <em>succinct output</em> — a short cryptographic object that convinces the verifier.</p>
+            <p class="small">Posted on-chain. Tiny relative to the witness.</p>
+          </div>
+        </div>
+        <aside class="notes">Analogy: the witness is the full exam paper with your working; the proof is just the final grade certificate. The verifier (L1) only sees the certificate. Ask students to identify which is the bottleneck: generating the witness or computing the proof? (Answer: both, but witness generation is often underestimated.)</aside>
+      </section>
+
+      <section>
+        <h2>EVM-Equivalence Intuition</h2>
+        <ul>
+          <li><strong>EVM-compatible:</strong> runs Solidity, but may differ in edge cases.</li>
+          <li><strong>EVM-equivalent:</strong> behaves exactly like Ethereum's EVM — same opcodes, gas, precompiles.</li>
+          <li>Why it matters: existing contracts, tools, and tests work <em>unchanged</em>.</li>
+        </ul>
+        <div class="box">
+          <p>The zkEVM must prove every opcode faithfully — making the circuit design much harder but the developer experience seamless.</p>
+        </div>
+        <aside class="notes">Emphasize the spectrum: Type 1 (fully equivalent) → Type 4 (high-level language compatible). Most production zkEVMs aim for Type 2 or 2.5. The closer to Type 1, the harder the circuits but the better the compatibility. Ask: "What breaks if you skip a rarely-used opcode?"</aside>
+      </section>
+
+      <!-- ===== BACKGROUND (new) ===== -->
+      <section>
+        <h2>📚 Background — Crypto Building Blocks</h2>
+        <p>Essential primitives that underpin all zero-knowledge systems.</p>
+        <aside class="notes">Transition slide. This section covers the cryptographic and data-layer foundations. 10 minutes.</aside>
+      </section>
+
+      <section>
+        <h2>Hashes & Merkle Trees</h2>
+        <div class="two-col">
+          <div>
+            <h3 style="color:var(--accent)">Hash Functions</h3>
+            <ul>
+              <li>Deterministic, one-way, collision-resistant</li>
+              <li>ZK-friendly hashes: Poseidon, Rescue</li>
+              <li>Used everywhere: commitments, Fiat-Shamir, Merkle roots</li>
+            </ul>
+          </div>
+          <div>
+            <h3 style="color:var(--green)">Merkle Trees</h3>
+            <ul>
+              <li>Commit to large datasets with a single root</li>
+              <li>Prove membership with O(log n) path</li>
+              <li>Ethereum state = giant Merkle Patricia Trie</li>
+            </ul>
+          </div>
+        </div>
+        <aside class="notes">Ask students if they've used git — git is a Merkle DAG. Poseidon is preferred in ZK circuits because it's ~100x cheaper to prove than SHA-256 inside a circuit. Draw a simple 4-leaf Merkle tree and show how you verify one leaf.</aside>
+      </section>
+
+      <section>
+        <h2>Circuits & Arithmetization (Intuitive)</h2>
+        <ul>
+          <li>A <strong>circuit</strong> is a program expressed as math constraints (additions & multiplications over a finite field).</li>
+          <li><strong>Arithmetization</strong> = turning computation into polynomial equations the proof system can check.</li>
+          <li>Think of it as: <em>"compile your program into algebra"</em>.</li>
+        </ul>
+        <div class="box">
+          <p><strong>Example:</strong> Proving <code class="inline">x * y = z</code> where z is public but x, y are secret → one multiplication gate, one constraint.</p>
+        </div>
+        <aside class="notes">Don't go into R1CS or PLONKish details here — just build intuition. The key insight: any computation can be broken into simple add/multiply gates. The prover fills in all the wire values (witness), and the proof system checks that every gate's constraint holds without revealing the values. A zkEVM circuit has millions of gates — one for every opcode step.</aside>
+      </section>
+
+      <section>
+        <h2>Data Availability vs Validity</h2>
+        <div class="two-col">
+          <div class="box">
+            <h3 style="color:var(--orange)">Data Availability (DA)</h3>
+            <ul>
+              <li>Can anyone reconstruct the full state?</li>
+              <li>Rollups post data to L1 (calldata / blobs)</li>
+              <li>Without DA, even valid proofs are useless — you can't exit</li>
+            </ul>
+          </div>
+          <div class="box">
+            <h3 style="color:var(--accent)">Validity Proofs</h3>
+            <ul>
+              <li>Is the state transition correct?</li>
+              <li>ZK proofs guarantee correctness</li>
+              <li>Verified on-chain by a smart contract</li>
+            </ul>
+          </div>
+        </div>
+        <p class="small">A zk-rollup needs <em>both</em>: validity (proof) + data availability (posted data).</p>
+        <aside class="notes">Common misconception: "ZK rollups don't need data availability." They do! Without DA, users can't prove their balances to exit. Validity proofs ensure correctness; DA ensures liveness and user sovereignty. Optimistic rollups flip this: they assume validity and use fraud proofs + DA.</aside>
+      </section>
+
+      <!-- ===== TL;DR (existing, repositioned) ===== -->
+      <section>
+        <h2>TL;DR</h2>
+        <div class="box">
+          <p><strong>Build now with hybrid proving</strong>, optimize recursion pipelines, and ship with conservative circuit governance.</p>
+          <p><strong>Do in 2026:</strong> staged rollout, fallback paths, and measurable SLOs for proof generation.</p>
+        </div>
+        <ul>
+          <li>Short term: central coordinator + vetted proving partners.</li>
+          <li>Mid term: marketized prover supply with strict quality gates.</li>
+          <li>Always: treat proving correctness as critical infrastructure.</li>
+        </ul>
+        <aside class="notes">Give a practical one-minute summary for decision makers. Reinforce staged adoption over all-at-once decentralization.</aside>
+      </section>
+
+      <!-- ===== ROADMAP (existing slides grouped) ===== -->
+      <section>
+        <h2>Executive Summary</h2>
+        <ul>
+          <li>2026 is about <span class="accent">operational zkEVM</span>, not just proof-of-concept.</li>
+          <li>Winning stack = prover efficiency + secure circuits + reliable operations.</li>
+          <li>Near-term bottleneck: proving latency/cost and integration complexity.</li>
+          <li>Roadmap: pilot fast, harden aggressively, decentralize proving gradually.</li>
+        </ul>
+        <aside class="notes">Anchor audience: success is measured by user experience, costs, and security posture. Mention gradual decentralization to avoid premature complexity.</aside>
+      </section>
+
+      <section>
+        <h2>Overview</h2>
+        <ul>
+          <li>L1-zkEVM aligns EVM execution with succinct proof verification at L1.</li>
+          <li>Goals: lower trust assumptions, better throughput economics, deterministic settlement.</li>
+          <li>Core modules:
+            <ul>
+              <li>Execution layer (EVM-equivalent semantics)</li>
+              <li>Prover pipeline (trace → witness → proof)</li>
+              <li>Verifier contracts + settlement logic</li>
+            </ul>
+          </li>
+        </ul>
+        <aside class="notes">Define terminology quickly. Ensure everyone shares the same mental model: proving is a pipeline with multiple operational choke points.</aside>
+      </section>
+
+      <section>
+        <h2>Motivations</h2>
+        <ul>
+          <li><strong>Security:</strong> cryptographic validity over social trust.</li>
+          <li><strong>Scalability:</strong> compress execution verification cost.</li>
+          <li><strong>Composability:</strong> preserve EVM developer experience.</li>
+          <li><strong>Finality UX:</strong> predictable settlement windows.</li>
+          <li><strong>Cost control:</strong> optimize proving + calldata footprint.</li>
+        </ul>
+        <aside class="notes">Frame tradeoffs: you gain stronger correctness guarantees but pay for complexity in proving systems and operations.</aside>
+      </section>
+
+      <!-- ===== PROVER MARKET ===== -->
+      <section>
+        <h2>Prover Market</h2>
+        <ul>
+          <li>Emerging model: open prover marketplace with scoring + staking/slashing.</li>
+          <li>Requirements:
+            <ul>
+              <li>Deterministic job specs</li>
+              <li>Proof validity checks + anti-equivocation</li>
+              <li>Reputation and reliability metrics</li>
+            </ul>
+          </li>
+          <li>Roadmap should begin permissioned, then progressively open.</li>
+        </ul>
+        <aside class="notes">Emphasize market design risks: cartelization, latency gaming, and unreliable providers. Stress phased liberalization.</aside>
+      </section>
+
+      <section>
+        <h2>Prover Architectures</h2>
+        <ul>
+          <li><strong>Monolithic prover:</strong> simpler coordination, weaker elasticity.</li>
+          <li><strong>Modular pipeline:</strong> specialized stages, better parallelism.</li>
+          <li><strong>Recursive proving trees:</strong> aggregate many subproofs into one final proof.</li>
+          <li><strong>Hardware strategy:</strong> CPU baseline + GPU acceleration (+ optional FPGA/ASIC roadmap).</li>
+        </ul>
+        <p class="small">Selection criteria: latency target, capex/opex profile, failure isolation, and upgrade complexity.</p>
+        <aside class="notes">Discuss architecture as business decision too: cost predictability, vendor dependence, and operational resilience.</aside>
+      </section>
+
+      <!-- ===== REAL-TIME PROVING ===== -->
+      <section>
+        <h2>Real-Time Proving</h2>
+        <ul>
+          <li>Target class: near-real-time proofs for user-facing finality expectations.</li>
+          <li>Levers:
+            <ul>
+              <li>Parallel witness generation</li>
+              <li>Precompilation/circuit specialization</li>
+              <li>Aggressive batching + adaptive block sizing</li>
+            </ul>
+          </li>
+          <li>Need graceful degradation when proof queue backlogs.</li>
+        </ul>
+        <aside class="notes">Call out SLO mindset: P50/P95 proving latency, queue depth, and drop/fallback policies.</aside>
+      </section>
+
+      <!-- ===== ROLLOUT & SECURITY ===== -->
+      <section>
+        <h2>Integration Challenges</h2>
+        <ul>
+          <li>EVM edge-case compatibility and opcode semantics drift.</li>
+          <li>State model alignment across execution, witness, and verifier.</li>
+          <li>Bridges/oracles introducing non-zk trust dependencies.</li>
+          <li>Versioning pain: circuit upgrades vs client/protocol upgrades.</li>
+          <li>Observability gaps across proving pipeline stages.</li>
+        </ul>
+        <aside class="notes">Practical warning: most delays happen in integration, not core proving math. Instrument early and test adversarially.</aside>
+      </section>
+
+      <section>
+        <h2>Security</h2>
+        <ul>
+          <li><strong>Threats:</strong> circuit bugs, faulty witness generation, key compromise, malformed proofs.</li>
+          <li><strong>Controls:</strong> multi-implementation verification, formal methods on critical circuits, independent audits.</li>
+          <li><strong>Operational security:</strong> signer isolation, deterministic builds, reproducible prover binaries.</li>
+          <li><strong>Response:</strong> emergency brakes + rollback/fallback playbooks.</li>
+        </ul>
+        <aside class="notes">Treat zk stack as high-assurance software plus critical infra. Mention drills, incident readiness, and segmented privileges.</aside>
+      </section>
+
+      <section>
+        <h2>Rollout Plan (2026)</h2>
+        <ul>
+          <li><strong>Phase 0:</strong> private devnet, synthetic load tests.</li>
+          <li><strong>Phase 1:</strong> guarded testnet with partner provers.</li>
+          <li><strong>Phase 2:</strong> capped mainnet beta + strict risk limits.</li>
+          <li><strong>Phase 3:</strong> progressive decentralization of proving and governance.</li>
+        </ul>
+        <p class="small">Exit criteria per phase: correctness, latency SLOs, cost envelope, and incident readiness.</p>
+        <aside class="notes">Highlight explicit go/no-go gates. No phase should advance based on narrative momentum alone.</aside>
+      </section>
+
+      <section>
+        <h2>Diagrams (textual)</h2>
+        <div class="box">
+          <p><strong>Flow A:</strong> Tx Batch → Execution Trace → Witness Builder → Prover Workers → Recursive Aggregator → L1 Verifier → Finality</p>
+        </div>
+        <div class="box">
+          <p><strong>Flow B:</strong> Scheduler → Prover Market Queue → Assigned Worker → Proof + Metadata → Validity Check → Payment/Reputation Update</p>
+        </div>
+        <div class="box">
+          <p><strong>Flow C (fallback):</strong> Queue Congestion → Block Size Reduction + Priority Classes → Delayed Settlement Mode</p>
+        </div>
+        <aside class="notes">Use these as verbal architecture diagrams. Point out where to place metrics and failure detectors in each flow.</aside>
+      </section>
+
+      <section>
+        <h2>1-Week Plan</h2>
+        <ul>
+          <li>Finalize architecture decision record (ADR) for prover topology.</li>
+          <li>Define baseline SLOs: proof latency, queue depth, verifier gas budget.</li>
+          <li>Set up benchmark harness and representative transaction corpus.</li>
+          <li>Draft threat model and circuit audit scope.</li>
+          <li>Create incident runbook v0 for proving failures.</li>
+        </ul>
+        <aside class="notes">Week-1 objective is clarity and instrumentation, not perfection. Ensure measurable baselines exist before optimization.</aside>
+      </section>
+
+      <section>
+        <h2>1-Month Plan</h2>
+        <ul>
+          <li>Run end-to-end testnet pilot with continuous proving.</li>
+          <li>Implement recursive aggregation and queue autoscaling policy.</li>
+          <li>Complete first external security review and fix criticals.</li>
+          <li>Integrate observability dashboards + on-call alert thresholds.</li>
+          <li>Publish launch readiness report with risk register.</li>
+        </ul>
+        <aside class="notes">Month-1 should yield evidence: benchmark numbers, security findings, and an explicit risk register for stakeholders.</aside>
+      </section>
+
+      <section>
+        <h2>Implementer Checklist</h2>
+        <ul>
+          <li>☐ Circuit/version governance process defined</li>
+          <li>☐ Reproducible build + binary attestation in CI</li>
+          <li>☐ Multi-client verification path tested</li>
+          <li>☐ Prover failover + degraded mode validated</li>
+          <li>☐ Cost model reviewed against real workload</li>
+          <li>☐ Incident drills performed and documented</li>
+          <li>☐ Phase gate criteria signed off by engineering + security</li>
+        </ul>
+        <aside class="notes">Make this the action slide. Encourage owners and deadlines per checkbox.</aside>
+      </section>
+
+      <!-- ===== DEMOS & EXERCISES (new) ===== -->
+      <section>
+        <h2>🧪 Demos & Hands-On Exercises</h2>
+        <p>Five interactive activities to build practical intuition.</p>
+        <p class="small">Each demo includes step-by-step teacher instructions in speaker notes.</p>
+        <aside class="notes">Transition to interactive portion. Allow ~30 minutes total. Students can work individually or in pairs. Have a browser ready for the online demos.</aside>
+      </section>
+
+      <!-- Demo 1 -->
+      <section>
+        <h2>Demo 1: ZK Proof Visualization <span class="demo-tag">INTERACTIVE</span></h2>
+        <div class="box">
+          <p><strong>Goal:</strong> Visually understand what a proof "looks like" and how verification works.</p>
+        </div>
+        <ul>
+          <li>Open <a href="https://zkp.science" style="color:var(--accent)">zkp.science</a> interactive demos</li>
+          <li>Walk through the "3-coloring" graph proof</li>
+          <li>Observe: each round reveals partial info but never the full solution</li>
+          <li>After ~20 rounds, the verifier is convinced</li>
+        </ul>
+        <p class="small">💡 Discussion: Why does the verifier need multiple rounds? What happens if the prover cheats?</p>
+        <aside class="notes">TEACHER INSTRUCTIONS:
+1. Open zkp.science in a browser (or use the Sudoku ZK demo at https://zk-sudoku.vercel.app if preferred).
+2. Explain: the prover has a valid 3-coloring of a graph. The verifier picks a random edge each round.
+3. The prover reveals the colors of that edge's endpoints (but shuffles color labels each round).
+4. If any edge has same color → prover is caught cheating. After k rounds, cheating probability ≤ (1-1/m)^k.
+5. Key insight: the verifier never sees the full coloring — that's the "zero knowledge" part.
+6. Let students try: ask one to be the prover (with a solution on paper) and another to be the verifier picking edges.
+7. Debrief: connect this to blockchain — the L1 verifier contract plays the verifier role, but non-interactively (Fiat-Shamir).</aside>
+      </section>
+
+      <!-- Demo 2 -->
+      <section>
+        <h2>Demo 2: Toy Prover Simulation <span class="demo-tag">HANDS-ON</span></h2>
+        <div class="box">
+          <p><strong>Goal:</strong> Run a minimal proof system end-to-end on your laptop.</p>
+        </div>
+        <ul>
+          <li>Use <a href="https://github.com/iden3/snarkjs" style="color:var(--accent)">snarkjs</a> with a simple circuit: <code class="inline">a * b === c</code></li>
+          <li>Steps: write circuit → compile → generate witness → create proof → verify</li>
+          <li>Observe proof size vs witness size</li>
+        </ul>
+        <pre style="font-size:0.55em; background:#1e293b; padding:0.6em; border-radius:8px; text-align:left;">
+# Install
+npm i -g snarkjs circom
+
+# Compile circuit (multiplier.circom)
+circom multiplier.circom --r1cs --wasm --sym
+
+# Generate witness  (input.json: {"a":"3","b":"11"})
+node multiplier_js/generate_witness.js multiplier_js/multiplier.wasm input.json witness.wtns
+
+# Trusted setup + prove + verify
+snarkjs groth16 setup multiplier.r1cs pot12_final.ptau circuit.zkey
+snarkjs groth16 prove circuit.zkey witness.wtns proof.json public.json
+snarkjs groth16 verify verification_key.json public.json proof.json
+        </pre>
+        <aside class="notes">TEACHER INSTRUCTIONS:
+1. Pre-install snarkjs and circom on the lab machines OR have students use a Gitpod/Codespace with them pre-installed.
+2. Provide the multiplier.circom file: `template Multiplier() { signal input a; signal input b; signal output c; c <== a * b; } component main = Multiplier();`
+3. Provide input.json: {"a":"3","b":"11"} → public output c should be 33.
+4. Walk through each step. Pause at "trusted setup" to explain: this is the ceremony step SNARKs need.
+5. After proof generation, have students run `ls -la proof.json witness.wtns` to compare sizes.
+6. Key observation: witness is much larger; proof is tiny. That's succinctness.
+7. Bonus: change input to wrong values and show verification fails.
+8. Time: ~15 min if pre-installed, ~25 min if installing from scratch.</aside>
+      </section>
+
+      <!-- Demo 3 -->
+      <section>
+        <h2>Demo 3: Merkle Proof Exercise <span class="demo-tag">HANDS-ON</span></h2>
+        <div class="box">
+          <p><strong>Goal:</strong> Build and verify a Merkle proof by hand, then connect it to ZK state proofs.</p>
+        </div>
+        <ul>
+          <li>Construct a 4-leaf Merkle tree on paper (or whiteboard)</li>
+          <li>Leaves: <code class="inline">H("Alice:100")</code>, <code class="inline">H("Bob:50")</code>, <code class="inline">H("Carol:75")</code>, <code class="inline">H("Dave:200")</code></li>
+          <li>Generate a membership proof for Bob's balance</li>
+          <li>Verify: given root + proof path, confirm Bob has 50</li>
+        </ul>
+        <p class="small">💡 Extension: What if Bob tries to claim he has 500? Why does it fail?</p>
+        <aside class="notes">TEACHER INSTRUCTIONS:
+1. Draw a 4-leaf binary Merkle tree on the whiteboard. Label leaves L0-L3 with the hash of each account string.
+2. Compute interior nodes: N01 = H(L0 || L1), N23 = H(L2 || L3), Root = H(N01 || N23).
+3. Bob's proof path: sibling L0 (= H("Alice:100")) + sibling N23. Proof size = 2 hashes.
+4. Verification: recompute H(L0 || L1) using provided sibling + Bob's leaf, then H(result || N23), check against root.
+5. Ask: "If Bob lies about his balance, which hash changes?" → His leaf hash changes → the recomputed root won't match.
+6. Connect to zkEVM: Ethereum's state trie is a Merkle Patricia Trie. The zkEVM must prove correct state transitions over this structure.
+7. Optional code demo: use ethers.js `keccak256` to compute the hashes live.
+8. Time: ~10 min.</aside>
+      </section>
+
+      <!-- Demo 4 -->
+      <section>
+        <h2>Demo 4: Prover-Market Auction Simulation <span class="demo-tag">ROLE-PLAY</span></h2>
+        <div class="box">
+          <p><strong>Goal:</strong> Experience prover market dynamics through a classroom auction game.</p>
+        </div>
+        <ul>
+          <li>Divide class into <strong>Provers</strong> (3-5) and one <strong>Sequencer</strong></li>
+          <li>Sequencer posts a "block" (difficulty + deadline + reward)</li>
+          <li>Provers bid: price + estimated time</li>
+          <li>Sequencer selects winning bid; simulate proof delivery</li>
+          <li>Track reputation scores across 3 rounds</li>
+        </ul>
+        <p class="small">💡 Twist in round 3: one prover "fails" to deliver — what happens?</p>
+        <aside class="notes">TEACHER INSTRUCTIONS:
+1. Setup: assign 3-5 students as provers, 1 as sequencer, rest as observers/scorekeepers.
+2. Round 1: Sequencer announces Block A — difficulty: LOW, deadline: 5 min, reward: 10 tokens. Provers write bids on paper (price they'd accept + time estimate). Sequencer picks lowest price with reasonable time.
+3. Round 2: Block B — difficulty: HIGH, deadline: 2 min, reward: 25 tokens. Observe how bids change.
+4. Round 3: Block C — one pre-selected prover "wins" but then announces "proof failed / timed out." Sequencer must re-auction. Discuss: slashing, reputation damage, fallback strategies.
+5. Debrief questions: What prevents cartel behavior (all provers agreeing on high prices)? How do you balance speed vs cost? What's the minimum number of provers for a healthy market?
+6. Connect to real systems: Taiko, Scroll, and zkSync's prover selection mechanisms.
+7. Time: ~15 min.</aside>
+      </section>
+
+      <!-- Demo 5 -->
+      <section>
+        <h2>Demo 5: End-to-End zkEVM Transaction Trace <span class="demo-tag">WALKTHROUGH</span></h2>
+        <div class="box">
+          <p><strong>Goal:</strong> Trace a single transaction from submission to finality on a zkEVM.</p>
+        </div>
+        <ol style="font-size:0.85em;">
+          <li>User sends tx → Sequencer includes in batch</li>
+          <li>Execution trace generated (all opcodes + state changes)</li>
+          <li>Witness builder extracts private inputs</li>
+          <li>Prover computes proof over the trace</li>
+          <li>Recursive aggregator bundles with other batch proofs</li>
+          <li>Final proof submitted to L1 verifier contract</li>
+          <li>L1 confirms validity → batch is finalized ✅</li>
+        </ol>
+        <aside class="notes">TEACHER INSTRUCTIONS:
+1. Use a block explorer for a live zkEVM (e.g., https://explorer.zksync.io or https://scrollscan.com).
+2. Find a recent finalized batch. Click into it and show: batch number, proof tx on L1, number of L2 txs included.
+3. Walk through each step on the slide, mapping it to what you see on the explorer.
+4. Key observations: (a) Time between L2 tx and L1 finality — this is the proving latency. (b) Gas cost of the verify tx on L1 — this is shared across all txs in the batch. (c) The L1 verify tx calls a verifier contract — show the contract on Etherscan.
+5. Ask: "If proving takes 10 minutes and the batch has 1000 txs, what's the per-tx proving cost?"
+6. Optional deep-dive: show the verifier contract source code — it's surprisingly short because the math is in the precompiles.
+7. Time: ~10 min.</aside>
+      </section>
+
+      <!-- ===== CLOSING (existing) ===== -->
+      <section>
+        <h2>Next Steps</h2>
+        <ul>
+          <li>Choose pilot scope (apps, throughput, target latency).</li>
+          <li>Lock architecture + procurement for proving hardware.</li>
+          <li>Stand up partner prover program and qualification process.</li>
+          <li>Schedule quarterly security and performance gate reviews.</li>
+        </ul>
+        <p class="accent">Outcome goal: production-grade zkEVM with predictable costs and auditable safety.</p>
+        <aside class="notes">Close with ownership and timeline. Ask for explicit approvals on scope, budget, and risk tolerance.</aside>
+      </section>
+
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/dist/reveal.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@5/plugin/notes/notes.js"></script>
+  <script>
+    Reveal.initialize({
+      hash: true,
+      slideNumber: true,
+      progress: true,
+      controls: true,
+      plugins: [ RevealNotes ]
+    });
+  </script>
+</body>
+</html>
